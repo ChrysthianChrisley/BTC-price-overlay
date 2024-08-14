@@ -3,6 +3,8 @@ import requests
 import threading
 from PIL import Image, ImageDraw, ImageFont
 import pystray
+import sys
+import os
 
 currencies = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ETCUSDT', 'XRPUSDT', 'TRXUSDT', 'TONUSDT', 'SOLUSDT',
               'ETHBTC', 'BNBBTC', 'TONBTC', 'SOLBTC']
@@ -11,6 +13,9 @@ price_label = None
 window_hidden = False
 previous_price = None
 stop_event = threading.Event()
+
+# Verifique o idioma passado como argumento, padrão é English
+language = sys.argv[1] if len(sys.argv) > 1 else "English"
 
 def get_price(currency):
     try:
@@ -26,7 +31,7 @@ def update_price():
     if not stop_event.is_set():
         price = get_price(current_currency)
         
-        if (isinstance(price, str) and price.startswith("Error")):
+        if isinstance(price, str) and price.startswith("Error"):
             price_label.config(text=price, fg="black")
         else:
             if previous_price is None:
@@ -82,7 +87,17 @@ def create_image():
     draw.text((18, 10), "B", font=font, fill="white")
     return image
 
+def change_language(icon, item, lang):
+    # Reinicie o aplicativo com o novo idioma
+    os.execl(sys.executable, sys.executable, *sys.argv[:1], lang)
+
 def update_tray_menu():
+    global icon
+    currency_label = "Moeda" if language == "Português" else "Currency"
+    show_label = "Exibir" if window_hidden and language == "Português" else "Esconder" if language == "Português" else "Show" if window_hidden else "Hide"
+    exit_label = "Sair" if language == "Português" else "Exit"
+    title = "Rastreador de Preços" if language == "Português" else "Price Tracker"
+
     currency_menu = pystray.Menu(
         *[
             pystray.MenuItem(currency, lambda _, cur=currency: set_currency(cur), 
@@ -92,19 +107,22 @@ def update_tray_menu():
     )
     
     menu = pystray.Menu(
-        pystray.MenuItem('Currency', currency_menu),
-        pystray.MenuItem('Show' if window_hidden else 'Hide', hide_window),
-        pystray.MenuItem('Exit', quit_app)
+        pystray.MenuItem(currency_label, currency_menu),
+        pystray.MenuItem(show_label, hide_window),
+        pystray.MenuItem(exit_label, quit_app),
+        pystray.MenuItem('Language', pystray.Menu(
+            pystray.MenuItem('English', lambda icon, item: change_language(icon, item, "English"), checked=lambda item: language == "English"),
+            pystray.MenuItem('Português', lambda icon, item: change_language(icon, item, "Português"), checked=lambda item: language == "Português")
+        ))
     )
     
+    icon = pystray.Icon("price_tracker", create_image(), title)
     icon.menu = menu
 
 def setup_tray():
     global icon
-    image = create_image()
-    icon = pystray.Icon("price_tracker", image, "Price Tracker")
+    icon = pystray.Icon("price_tracker", create_image(), "Price Tracker")
     update_tray_menu()
-    icon.run()(icon)
     icon.run()
 
 def update_window_position(event=None):
